@@ -2,7 +2,15 @@
 
 A simple screensaver that displays a bouncing Lumon logo. Works as a regular window application on Linux and MacOS, and can be installed as a screensaver on Windows.
 
-## Prerequisites
+## Quick Install (Windows)
+
+1. Download LumonScreensaver.scr from [GitHub Releases](https://github.com/soundtrackgeek/lumon_screensaver/releases)
+2. Move LumonScreensaver.scr to C:\Windows\System32
+3. Right-click and select "Install"
+
+## Building from Source
+
+### Prerequisites
 
 ### Windows
 1. Install MSYS2 from: https://www.msys2.org/
