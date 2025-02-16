@@ -4,9 +4,11 @@
     #include <wchar.h>   // For wtoll
     #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
+    #include <commctrl.h>  // Add this for trackbar controls
     #include <gdiplus.h>
     #pragma comment(lib, "gdiplus.lib")
     #pragma comment(lib, "ole32.lib")
+    #pragma comment(lib, "comctl32.lib")  // Add this for common controls
     #ifndef SPI_SETSCREENSAVERRUNNING
         #define SPI_SETSCREENSAVERRUNNING 97
     #endif
@@ -130,6 +132,12 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
 
     // Entry point
     extern "C" int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+        // Initialize Common Controls
+        INITCOMMONCONTROLSEX icex;
+        icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
+        icex.dwICC = ICC_WIN95_CLASSES;
+        InitCommonControlsEx(&icex);
+
         // Parse command line using Unicode
         LPWSTR cmdLine = GetCommandLineW();
         bool isPreview = false;
