@@ -137,8 +137,10 @@ ScreenSaverState g_state;
         }
 
         // Get the primary monitor's resolution
-        int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+        int screenWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);  // Changed from SM_CXSCREEN
+        int screenHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN); // Changed from SM_CYSCREEN
+        int screenLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);    // Add this
+        int screenTop = GetSystemMetrics(SM_YVIRTUALSCREEN);    // Add this
 
         DWORD windowStyle;
         int windowX, windowY, windowWidth, windowHeight;
@@ -157,11 +159,11 @@ ScreenSaverState g_state;
             windowHeight = rect.bottom;
             windowStyle = WS_CHILD | WS_VISIBLE;
         } else if (isScreenSaver) {
-            windowX = 0;
-            windowY = 0;
+            windowX = screenLeft;      // Changed from 0
+            windowY = screenTop;       // Changed from 0
             windowWidth = screenWidth;
             windowHeight = screenHeight;
-            windowStyle = WS_POPUP | WS_VISIBLE;
+            windowStyle = WS_POPUP;    // Remove WS_VISIBLE
         } else {
             // Test mode - windowed
             windowX = (screenWidth - 800) / 2;  // Center the window
@@ -203,9 +205,11 @@ ScreenSaverState g_state;
             SetForegroundWindow(hwnd);
         }
 
-        // After creating the window in screensaver mode, set it as topmost
+        // After creating the window in screensaver mode, make it visible and topmost
         if (isScreenSaver) {
-            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+            ShowWindow(hwnd, SW_SHOWMAXIMIZED);  // Add this line
+            SetWindowPos(hwnd, HWND_TOPMOST, screenLeft, screenTop, screenWidth, screenHeight, 
+                        SWP_SHOWWINDOW);  // Modified
         }
 
         // Message loop
