@@ -1,7 +1,7 @@
 #include <windows.h>
 #include "resource.h"
 
-IDR_LOGO RCDATA "lumon_logo.png"
+IDR_LOGO PNG "lumon_logo.png"
 
 IDD_CONFIG DIALOG 0, 0, 200, 80
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU

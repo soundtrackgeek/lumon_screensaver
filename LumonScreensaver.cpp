@@ -399,22 +399,43 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
         RECT rect;
         GetClientRect(hwnd, &rect);
         
-        // Load the logo from resources
-        HRSRC hResource = FindResource(NULL, MAKEINTRESOURCE(IDR_LOGO), TEXT("PNG"));
-        if (hResource) {
-            HGLOBAL hGlobal = LoadResource(NULL, hResource);
-            if (hGlobal) {
-                void* resourceData = LockResource(hGlobal);
-                DWORD resourceSize = SizeofResource(NULL, hResource);
-                
-                IStream* stream = NULL;
-                if (CreateStreamOnHGlobal(NULL, TRUE, &stream) == S_OK) {
-                    ULONG bytesWritten;
-                    stream->Write(resourceData, resourceSize, &bytesWritten);
-                    g_state.logo.reset(Gdiplus::Image::FromStream(stream));
-                    stream->Release();
-                }
-            }
+        // Load the logo from resources with PNG type
+        HRSRC hResource = FindResource(NULL, MAKEINTRESOURCE(IDR_LOGO), L"PNG");
+        if (!hResource) {
+            return;
+        }
+        
+        HGLOBAL hGlobal = LoadResource(NULL, hResource);
+        if (!hGlobal) {
+            return;
+        }
+        
+        void* resourceData = LockResource(hGlobal);
+        if (!resourceData) {
+            return;
+        }
+        
+        DWORD resourceSize = SizeofResource(NULL, hResource);
+        if (resourceSize == 0) {
+            return;
+        }
+        
+        IStream* stream = NULL;
+        if (CreateStreamOnHGlobal(NULL, TRUE, &stream) != S_OK) {
+            return;
+        }
+        
+        ULONG bytesWritten;
+        if (stream->Write(resourceData, resourceSize, &bytesWritten) != S_OK) {
+            stream->Release();
+            return;
+        }
+        
+        g_state.logo.reset(Gdiplus::Image::FromStream(stream));
+        stream->Release();
+        
+        if (!g_state.logo || g_state.logo->GetLastStatus() != Gdiplus::Ok) {
+            return;
         }
 
         // Initialize position and movement
@@ -457,15 +478,23 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
             g_state.dy = -g_state.dy;
         }
 
-        InvalidateRect(hwnd, NULL, TRUE);
+        // Change this line to FALSE to prevent background erase
+        InvalidateRect(hwnd, NULL, FALSE);
     }
 
     void RenderFrame(HWND hwnd) {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
         
-        // Create a GDI+ graphics object
-        Gdiplus::Graphics graphics(hdc);
+        // Create a memory DC for double buffering
+        HDC memDC = CreateCompatibleDC(hdc);
+        RECT rect;
+        GetClientRect(hwnd, &rect);
+        HBITMAP memBitmap = CreateCompatibleBitmap(hdc, rect.right, rect.bottom);
+        HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, memBitmap);
+        
+        // Create a GDI+ graphics object for the memory DC
+        Gdiplus::Graphics graphics(memDC);
         graphics.SetSmoothingMode(Gdiplus::SmoothingModeAntiAlias);
 
         // Clear the background
@@ -477,6 +506,14 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
                 g_state.width, g_state.height);
         }
 
+        // Copy the memory DC to the window DC
+        BitBlt(hdc, 0, 0, rect.right, rect.bottom, memDC, 0, 0, SRCCOPY);
+
+        // Cleanup
+        SelectObject(memDC, oldBitmap);
+        DeleteObject(memBitmap);
+        DeleteDC(memDC);
+        
         EndPaint(hwnd, &ps);
     }
 
