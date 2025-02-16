@@ -52,6 +52,36 @@ ScreenSaverState g_state;
 
     // Entry point
     extern "C" int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+        // Parse command line
+        LPSTR cmdLine = GetCommandLine();
+        bool isPreview = false;
+        bool isConfig = false;
+        bool isScreenSaver = false;
+        HWND hwndParent = NULL;
+
+        if (strlen(cmdLine) > 2) {
+            switch (cmdLine[2]) {
+                case 'p':
+                case 'P':
+                    isPreview = true;
+                    hwndParent = (HWND)atoi(cmdLine + 3);
+                    break;
+                case 'c':
+                case 'C':
+                    isConfig = true;
+                    hwndParent = (HWND)atoi(cmdLine + 3);
+                    MessageBox(NULL, TEXT("No configuration options available."), TEXT("Lumon Screensaver"), MB_OK | MB_ICONINFORMATION);
+                    return 0;
+                case 's':
+                case 'S':
+                    isScreenSaver = true;
+                    break;
+                default:
+                    // If no valid flag, run in test mode (windowed)
+                    break;
+            }
+        }
+
         // Initialize GDI+
         Gdiplus::GdiplusStartupInput gdiplusStartupInput;
         Gdiplus::GdiplusStartup(&g_gdiplusToken, &gdiplusStartupInput, NULL);
@@ -65,21 +95,55 @@ ScreenSaverState g_state;
         wc.lpfnWndProc = (WNDPROC)ScreenSaverProc;
         wc.hInstance = hInstance;
         wc.lpszClassName = TEXT("LumonScreensaverClass");
+        wc.hCursor = isScreenSaver ? NULL : LoadCursor(NULL, IDC_ARROW);
         RegisterClass(&wc);
 
-        // Create the screensaver window in fullscreen
+        DWORD windowStyle;
+        int windowX, windowY, windowWidth, windowHeight;
+
+        if (isPreview) {
+            // Preview mode - fit in the preview window
+            RECT rect;
+            GetClientRect(hwndParent, &rect);
+            windowX = 0;
+            windowY = 0;
+            windowWidth = rect.right;
+            windowHeight = rect.bottom;
+            windowStyle = WS_CHILD | WS_VISIBLE;
+        } else if (isScreenSaver) {
+            // Full screen mode
+            windowX = 0;
+            windowY = 0;
+            windowWidth = screenWidth;
+            windowHeight = screenHeight;
+            windowStyle = WS_POPUP | WS_VISIBLE;
+        } else {
+            // Test mode - windowed
+            windowX = CW_USEDEFAULT;
+            windowY = CW_USEDEFAULT;
+            windowWidth = 800;
+            windowHeight = 600;
+            windowStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
+        }
+
+        // Create the window
         HWND hwnd = CreateWindow(
             TEXT("LumonScreensaverClass"),
             TEXT("Lumon Screensaver"),
-            WS_POPUP | WS_VISIBLE, // Use WS_POPUP for fullscreen
-            0, 0,                  // Position at (0,0)
-            screenWidth,           // Full screen width
-            screenHeight,          // Full screen height
-            NULL, NULL, hInstance, NULL
+            windowStyle,
+            windowX, windowY,
+            windowWidth, windowHeight,
+            hwndParent, NULL, hInstance, NULL
         );
 
-        // Hide the cursor
-        ShowCursor(FALSE);
+        if (!hwnd) {
+            return 1;
+        }
+
+        // Hide cursor in screensaver mode
+        if (isScreenSaver) {
+            ShowCursor(FALSE);
+        }
 
         // Message loop
         MSG msg;
@@ -88,8 +152,10 @@ ScreenSaverState g_state;
             DispatchMessage(&msg);
         }
 
-        // Show the cursor before exit
-        ShowCursor(TRUE);
+        // Show cursor before exit if we hid it
+        if (isScreenSaver) {
+            ShowCursor(TRUE);
+        }
 
         // Cleanup GDI+
         Gdiplus::GdiplusShutdown(g_gdiplusToken);
