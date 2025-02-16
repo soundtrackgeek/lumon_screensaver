@@ -109,11 +109,18 @@ ScreenSaverState g_state;
                 case L's':
                 case L'S':
                     isScreenSaver = true;
+                    g_isScreenSaver = true;  // Add this line
                     break;
                 default:
-                    // If no valid flag, run in test mode (windowed)
+                    // If running without arguments, assume screensaver mode
+                    isScreenSaver = true;    // Add this line
+                    g_isScreenSaver = true;  // Add this line
                     break;
             }
+        } else {
+            // No arguments, assume screensaver mode
+            isScreenSaver = true;            // Add this block
+            g_isScreenSaver = true;
         }
 
         // Tell system that screensaver is running
@@ -137,10 +144,8 @@ ScreenSaverState g_state;
         }
 
         // Get the primary monitor's resolution
-        int screenWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);  // Changed from SM_CXSCREEN
-        int screenHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN); // Changed from SM_CYSCREEN
-        int screenLeft = GetSystemMetrics(SM_XVIRTUALSCREEN);    // Add this
-        int screenTop = GetSystemMetrics(SM_YVIRTUALSCREEN);    // Add this
+        int screenWidth = GetSystemMetrics(SM_CXSCREEN);    // Changed back to SM_CXSCREEN
+        int screenHeight = GetSystemMetrics(SM_CYSCREEN);   // Changed back to SM_CYSCREEN
 
         DWORD windowStyle;
         int windowX, windowY, windowWidth, windowHeight;
@@ -159,11 +164,11 @@ ScreenSaverState g_state;
             windowHeight = rect.bottom;
             windowStyle = WS_CHILD | WS_VISIBLE;
         } else if (isScreenSaver) {
-            windowX = screenLeft;      // Changed from 0
-            windowY = screenTop;       // Changed from 0
+            windowX = 0;
+            windowY = 0;
             windowWidth = screenWidth;
             windowHeight = screenHeight;
-            windowStyle = WS_POPUP;    // Remove WS_VISIBLE
+            windowStyle = WS_POPUP | WS_MAXIMIZE;  // Changed window style
         } else {
             // Test mode - windowed
             windowX = (screenWidth - 800) / 2;  // Center the window
@@ -207,9 +212,12 @@ ScreenSaverState g_state;
 
         // After creating the window in screensaver mode, make it visible and topmost
         if (isScreenSaver) {
-            ShowWindow(hwnd, SW_SHOWMAXIMIZED);  // Add this line
-            SetWindowPos(hwnd, HWND_TOPMOST, screenLeft, screenTop, screenWidth, screenHeight, 
-                        SWP_SHOWWINDOW);  // Modified
+            SetWindowLong(hwnd, GWL_STYLE, WS_POPUP);      // Add this line
+            SetWindowLong(hwnd, GWL_EXSTYLE, WS_EX_TOPMOST);  // Add this line
+            ShowWindow(hwnd, SW_MAXIMIZE);                  // Changed to SW_MAXIMIZE
+            UpdateWindow(hwnd);                            // Add this line
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, screenWidth, screenHeight, 
+                        SWP_SHOWWINDOW | SWP_FRAMECHANGED);
         }
 
         // Message loop
