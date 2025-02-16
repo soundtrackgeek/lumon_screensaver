@@ -42,8 +42,11 @@ struct ScreenSaverState {
     int screenWidth;
     int screenHeight;
     int speed;  // Add speed setting
+    COLORREF color;  // Add color setting
     #ifdef _WIN32
         std::unique_ptr<Gdiplus::Image> logo;
+        std::unique_ptr<Gdiplus::ColorMatrix> colorMatrix;
+        std::unique_ptr<Gdiplus::ImageAttributes> imageAttributes;
     #endif
 };
 
@@ -52,6 +55,7 @@ ScreenSaverState g_state;
 // Registry key for saving settings
 const wchar_t* REGISTRY_KEY = L"Software\\Lumon\\Screensaver";
 const wchar_t* SPEED_VALUE = L"Speed";
+const wchar_t* COLOR_VALUE = L"Color";  // Add color registry value
 
 // Function to load settings from registry
 void LoadSettings() {
@@ -60,9 +64,15 @@ void LoadSettings() {
         DWORD value = 5, size = sizeof(DWORD);
         RegQueryValueEx(hKey, SPEED_VALUE, NULL, NULL, (LPBYTE)&value, &size);
         g_state.speed = value;
+        
+        value = RGB(255, 255, 255);  // Default white
+        RegQueryValueEx(hKey, COLOR_VALUE, NULL, NULL, (LPBYTE)&value, &size);
+        g_state.color = value;
+        
         RegCloseKey(hKey);
     } else {
         g_state.speed = 5;  // Default speed
+        g_state.color = RGB(255, 255, 255);  // Default white
     }
 }
 
@@ -73,12 +83,42 @@ void SaveSettings() {
         REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
         DWORD value = g_state.speed;
         RegSetValueEx(hKey, SPEED_VALUE, 0, REG_DWORD, (LPBYTE)&value, sizeof(DWORD));
+        value = g_state.color;
+        RegSetValueEx(hKey, COLOR_VALUE, 0, REG_DWORD, (LPBYTE)&value, sizeof(DWORD));
         RegCloseKey(hKey);
     }
 }
 
+// Function to update color preview in dialog
+void UpdateColorPreview(HWND hwndDlg) {
+    HWND hwndPreview = GetDlgItem(hwndDlg, IDC_COLOR_PREVIEW);
+    InvalidateRect(hwndPreview, NULL, TRUE);
+}
+
+// Color preview window procedure
+LRESULT CALLBACK ColorPreviewProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+        case WM_PAINT: {
+            PAINTSTRUCT ps;
+            HDC hdc = BeginPaint(hwnd, &ps);
+            RECT rect;
+            GetClientRect(hwnd, &rect);
+            
+            HBRUSH brush = CreateSolidBrush(g_state.color);
+            FillRect(hdc, &rect, brush);
+            DeleteObject(brush);
+            
+            EndPaint(hwnd, &ps);
+            return 0;
+        }
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
 // Configuration dialog procedure
 INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    static WNDPROC oldColorPreviewProc;
+    
     switch (uMsg) {
         case WM_INITDIALOG: {
             // Initialize slider
@@ -90,6 +130,13 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
             wchar_t speedText[8];
             _itow_s(g_state.speed, speedText, 8, 10);
             SetDlgItemText(hwndDlg, IDC_SPEED_TEXT, speedText);
+            
+            // Subclass color preview control
+            HWND hwndPreview = GetDlgItem(hwndDlg, IDC_COLOR_PREVIEW);
+            oldColorPreviewProc = (WNDPROC)SetWindowLongPtr(hwndPreview, GWLP_WNDPROC, 
+                (LONG_PTR)ColorPreviewProc);
+            
+            UpdateColorPreview(hwndDlg);
             return TRUE;
         }
         
@@ -105,6 +152,22 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
 
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
+                case IDC_COLOR_BUTTON: {
+                    CHOOSECOLOR cc = {0};
+                    static COLORREF customColors[16] = {0};
+                    
+                    cc.lStructSize = sizeof(CHOOSECOLOR);
+                    cc.hwndOwner = hwndDlg;
+                    cc.lpCustColors = customColors;
+                    cc.rgbResult = g_state.color;
+                    cc.Flags = CC_FULLOPEN | CC_RGBINIT;
+                    
+                    if (ChooseColor(&cc)) {
+                        g_state.color = cc.rgbResult;
+                        UpdateColorPreview(hwndDlg);
+                    }
+                    return TRUE;
+                }
                 case IDOK:
                     g_state.speed = SendMessage(GetDlgItem(hwndDlg, IDC_SPEED_SLIDER), TBM_GETPOS, 0, 0);
                     SaveSettings();
@@ -445,6 +508,18 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
         g_state.y = rand() % (rect.bottom - g_state.height);
         g_state.dx = g_state.speed;
         g_state.dy = g_state.speed;
+
+        // Initialize color matrix for tinting
+        g_state.colorMatrix.reset(new Gdiplus::ColorMatrix{
+            GetRValue(g_state.color) / 255.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, GetGValue(g_state.color) / 255.0f, 0.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, GetBValue(g_state.color) / 255.0f, 0.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+            0.0f, 0.0f, 0.0f, 0.0f, 1.0f
+        });
+
+        g_state.imageAttributes.reset(new Gdiplus::ImageAttributes());
+        g_state.imageAttributes->SetColorMatrix(g_state.colorMatrix.get());
     }
 
     void CleanupScreenSaver() {
@@ -500,10 +575,14 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
         // Clear the background
         graphics.Clear(Gdiplus::Color::Black);
 
-        // Draw the logo
-        if (g_state.logo) {
-            graphics.DrawImage(g_state.logo.get(), g_state.x, g_state.y, 
-                g_state.width, g_state.height);
+        // Draw the logo with color tinting
+        if (g_state.logo && g_state.imageAttributes) {
+            Gdiplus::RectF destRect((float)g_state.x, (float)g_state.y, 
+                                   (float)g_state.width, (float)g_state.height);
+            graphics.DrawImage(g_state.logo.get(), destRect, 0, 0, 
+                             (float)g_state.logo->GetWidth(), 
+                             (float)g_state.logo->GetHeight(),
+                             Gdiplus::UnitPixel, g_state.imageAttributes.get());
         }
 
         // Copy the memory DC to the window DC

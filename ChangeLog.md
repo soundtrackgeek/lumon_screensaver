@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Lumon Bouncing Logo Screensaver will be documented in this file.
 
+## [1.0.3] - 2024-01-16
+### Added
+- Color customization for the logo
+- Color picker dialog in settings
+- Color persistence across sessions
+
 ## [1.0.2] - 2024-01-15
 ### Added
 - Configurable speed setting (1-10) for logo movement
