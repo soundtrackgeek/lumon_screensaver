@@ -56,6 +56,10 @@ ScreenSaverState g_state;
         Gdiplus::GdiplusStartupInput gdiplusStartupInput;
         Gdiplus::GdiplusStartup(&g_gdiplusToken, &gdiplusStartupInput, NULL);
 
+        // Get the primary monitor's resolution
+        int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+
         // Register the screensaver window class
         WNDCLASS wc = {};
         wc.lpfnWndProc = (WNDPROC)ScreenSaverProc;
@@ -63,15 +67,19 @@ ScreenSaverState g_state;
         wc.lpszClassName = TEXT("LumonScreensaverClass");
         RegisterClass(&wc);
 
-        // Create the screensaver window
-        CreateWindow(
+        // Create the screensaver window in fullscreen
+        HWND hwnd = CreateWindow(
             TEXT("LumonScreensaverClass"),
             TEXT("Lumon Screensaver"),
-            WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            CW_USEDEFAULT, CW_USEDEFAULT,
-            CW_USEDEFAULT, CW_USEDEFAULT,
+            WS_POPUP | WS_VISIBLE, // Use WS_POPUP for fullscreen
+            0, 0,                  // Position at (0,0)
+            screenWidth,           // Full screen width
+            screenHeight,          // Full screen height
             NULL, NULL, hInstance, NULL
         );
+
+        // Hide the cursor
+        ShowCursor(FALSE);
 
         // Message loop
         MSG msg;
@@ -79,6 +87,9 @@ ScreenSaverState g_state;
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
+
+        // Show the cursor before exit
+        ShowCursor(TRUE);
 
         // Cleanup GDI+
         Gdiplus::GdiplusShutdown(g_gdiplusToken);
@@ -103,7 +114,17 @@ ScreenSaverState g_state;
             case WM_DESTROY:
                 KillTimer(hwnd, 1);
                 CleanupScreenSaver();
+                ShowCursor(TRUE);  // Make sure cursor is shown when exiting
                 PostQuitMessage(0);
+                return 0;
+
+            // Add input handling to exit screensaver
+            case WM_KEYDOWN:
+            case WM_MOUSEMOVE:
+            case WM_LBUTTONDOWN:
+            case WM_RBUTTONDOWN:
+            case WM_MBUTTONDOWN:
+                DestroyWindow(hwnd);
                 return 0;
 
             default:
