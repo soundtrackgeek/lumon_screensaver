@@ -8,7 +8,9 @@
     #include <gdiplus.h>
     #pragma comment(lib, "gdiplus.lib")
     #pragma comment(lib, "ole32.lib")
-    #pragma comment(lib, "comctl32.lib")  // Add this for common controls
+    #pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+    #pragma comment(lib, "comctl32.lib")
+    #pragma comment(lib, "shlwapi.lib")
     #ifndef SPI_SETSCREENSAVERRUNNING
         #define SPI_SETSCREENSAVERRUNNING 97
     #endif

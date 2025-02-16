@@ -43,7 +43,7 @@ windres resources.rc -O coff -o resources.res
 ```
 Then compile the program:
 ```bash
-g++ -o LumonScreensaver.exe LumonScreensaver.cpp resources.res -static -lgdiplus -lgdi32 -luser32 -lole32 -loleaut32 -luuid -mwindows -DUNICODE -D_UNICODE
+g++ -o LumonScreensaver.exe LumonScreensaver.cpp resources.res -static -lgdiplus -lgdi32 -luser32 -lole32 -loleaut32 -luuid -lcomctl32 -lshlwapi -mwindows -DUNICODE -D_UNICODE
 ```
 To install as screensaver:
 1. Copy LumonScreensaver.exe to LumonScreensaver.scr
