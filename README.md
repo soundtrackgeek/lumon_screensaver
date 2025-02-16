@@ -8,6 +8,11 @@ A simple screensaver that displays a bouncing Lumon logo. Works as a regular win
 2. Move LumonScreensaver.scr to C:\Windows\System32
 3. Right-click and select "Install"
 
+## Configuration (Windows)
+
+Right-click the screensaver in Windows Screen Saver Settings and click "Settings" to configure:
+- Speed: Adjust the movement speed of the logo (1-10, default is 5)
+
 ## Building from Source
 
 ### Prerequisites

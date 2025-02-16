@@ -1,1 +1,4 @@
 #define IDR_LOGO 101
+#define IDD_CONFIG 102
+#define IDC_SPEED_SLIDER 103
+#define IDC_SPEED_TEXT 104

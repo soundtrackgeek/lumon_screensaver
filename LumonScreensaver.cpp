@@ -37,12 +37,83 @@ struct ScreenSaverState {
     int height;
     int screenWidth;
     int screenHeight;
+    int speed;  // Add speed setting
     #ifdef _WIN32
         std::unique_ptr<Gdiplus::Image> logo;
     #endif
 };
 
 ScreenSaverState g_state;
+
+// Registry key for saving settings
+const wchar_t* REGISTRY_KEY = L"Software\\Lumon\\Screensaver";
+const wchar_t* SPEED_VALUE = L"Speed";
+
+// Function to load settings from registry
+void LoadSettings() {
+    HKEY hKey;
+    if (RegOpenKeyEx(HKEY_CURRENT_USER, REGISTRY_KEY, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD value = 5, size = sizeof(DWORD);
+        RegQueryValueEx(hKey, SPEED_VALUE, NULL, NULL, (LPBYTE)&value, &size);
+        g_state.speed = value;
+        RegCloseKey(hKey);
+    } else {
+        g_state.speed = 5;  // Default speed
+    }
+}
+
+// Function to save settings to registry
+void SaveSettings() {
+    HKEY hKey;
+    if (RegCreateKeyEx(HKEY_CURRENT_USER, REGISTRY_KEY, 0, NULL, 
+        REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        DWORD value = g_state.speed;
+        RegSetValueEx(hKey, SPEED_VALUE, 0, REG_DWORD, (LPBYTE)&value, sizeof(DWORD));
+        RegCloseKey(hKey);
+    }
+}
+
+// Configuration dialog procedure
+INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+        case WM_INITDIALOG: {
+            // Initialize slider
+            HWND hwndSlider = GetDlgItem(hwndDlg, IDC_SPEED_SLIDER);
+            SendMessage(hwndSlider, TBM_SETRANGE, TRUE, MAKELPARAM(1, 10));
+            SendMessage(hwndSlider, TBM_SETPOS, TRUE, g_state.speed);
+            
+            // Set initial text
+            wchar_t speedText[8];
+            _itow_s(g_state.speed, speedText, 8, 10);
+            SetDlgItemText(hwndDlg, IDC_SPEED_TEXT, speedText);
+            return TRUE;
+        }
+        
+        case WM_HSCROLL: {
+            if ((HWND)lParam == GetDlgItem(hwndDlg, IDC_SPEED_SLIDER)) {
+                int pos = SendMessage(GetDlgItem(hwndDlg, IDC_SPEED_SLIDER), TBM_GETPOS, 0, 0);
+                wchar_t speedText[8];
+                _itow_s(pos, speedText, 8, 10);
+                SetDlgItemText(hwndDlg, IDC_SPEED_TEXT, speedText);
+            }
+            return TRUE;
+        }
+
+        case WM_COMMAND:
+            switch (LOWORD(wParam)) {
+                case IDOK:
+                    g_state.speed = SendMessage(GetDlgItem(hwndDlg, IDC_SPEED_SLIDER), TBM_GETPOS, 0, 0);
+                    SaveSettings();
+                    EndDialog(hwndDlg, IDOK);
+                    return TRUE;
+                case IDCANCEL:
+                    EndDialog(hwndDlg, IDCANCEL);
+                    return TRUE;
+            }
+            break;
+    }
+    return FALSE;
+}
 
 #ifdef _WIN32
     ULONG_PTR g_gdiplusToken;
@@ -75,6 +146,9 @@ ScreenSaverState g_state;
             return 1;
         }
 
+        // Load settings from registry
+        LoadSettings();
+
         // Skip the program name in command line
         bool inQuotes = false;
         LPWSTR p = cmdLine;
@@ -103,7 +177,7 @@ ScreenSaverState g_state;
                     if (*(p + 2)) {  // Has window handle
                         hwndParent = (HWND)(ULONG_PTR)wtoll(p + 3);
                     }
-                    MessageBoxW(NULL, L"No configuration options available.", L"Lumon Screensaver", MB_OK | MB_ICONINFORMATION);
+                    DialogBox(hInstance, MAKEINTRESOURCE(IDD_CONFIG), hwndParent, ConfigDialogProc);
                     Gdiplus::GdiplusShutdown(gdiplusToken);
                     return 0;
                 case L's':
@@ -338,8 +412,8 @@ ScreenSaverState g_state;
         g_state.height = g_state.logo ? g_state.logo->GetHeight() : 100;
         g_state.x = rand() % (rect.right - g_state.width);
         g_state.y = rand() % (rect.bottom - g_state.height);
-        g_state.dx = 5;
-        g_state.dy = 5;
+        g_state.dx = g_state.speed;
+        g_state.dy = g_state.speed;
     }
 
     void CleanupScreenSaver() {

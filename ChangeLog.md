@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Lumon Bouncing Logo Screensaver will be documented in this file.
 
+## [1.0.2] - 2024-01-15
+### Added
+- Configurable speed setting (1-10) for logo movement
+- Settings dialog in Windows screensaver mode
+- Speed persistence across sessions
+
 ## [1.0.1] - 2024-01-10
 ### Added
 - Pre-compiled Windows screensaver (.scr) available on GitHub Releases
