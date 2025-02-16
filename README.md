@@ -24,8 +24,13 @@ A simple screensaver that displays a bouncing Lumon logo. Works as a regular win
 ## Building
 
 ### Windows
+First, compile the resource file:
 ```bash
-g++ -o LumonScreensaver.exe LumonScreensaver.cpp resources.rc -lgdiplus -lgdi32 -luser32 -lole32 -loleaut32 -luuid -mwindows -DUNICODE -D_UNICODE
+windres resources.rc -O coff -o resources.res
+```
+Then compile the program:
+```bash
+g++ -o LumonScreensaver.exe LumonScreensaver.cpp resources.res -lgdiplus -lgdi32 -luser32 -lole32 -loleaut32 -luuid -mwindows -DUNICODE -D_UNICODE
 ```
 To install as screensaver:
 1. Copy LumonScreensaver.exe to LumonScreensaver.scr
@@ -64,3 +69,9 @@ If you get compiler errors about missing headers or undefined types:
 2. Make sure you're using the MSYS2 MINGW64 version of g++
 3. Verify your PATH includes C:\msys64\mingw64\bin
 4. If using PowerShell/Command Prompt, run `g++ --version` to confirm you're using the MinGW version
+
+### Resource Compilation
+If you get errors about the resource file:
+1. Make sure to compile resources.rc using windres first
+2. Check that lumon_logo.png exists in the same directory as resources.rc
+3. If windres fails, verify the PNG file is a valid image file
