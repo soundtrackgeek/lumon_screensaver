@@ -5,9 +5,12 @@ A simple screensaver that displays a bouncing Lumon logo. Works as a regular win
 ## Prerequisites
 
 ### Windows
-1. Install MinGW-w64 from: https://www.mingw-w64.org/
-2. Add MinGW-w64's bin directory to your PATH
-3. Install the Windows SDK for GDI+ headers
+1. Install MSYS2 from: https://www.msys2.org/
+2. Open MSYS2 MINGW64 terminal and run:
+   ```bash
+   pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-gdb mingw-w64-x86_64-windows-default-manifest
+   ```
+3. Add `C:\msys64\mingw64\bin` to your PATH
 
 ### Linux
 1. Install g++: `sudo apt-get install build-essential` (Ubuntu/Debian) or `sudo dnf install gcc-c++` (Fedora)
@@ -22,7 +25,7 @@ A simple screensaver that displays a bouncing Lumon logo. Works as a regular win
 
 ### Windows
 ```bash
-g++ -o LumonScreensaver.exe LumonScreensaver.cpp resources.rc -lgdiplus -lgdi32 -luser32 -mwindows
+g++ -o LumonScreensaver.exe LumonScreensaver.cpp resources.rc -lgdiplus -lgdi32 -luser32 -lole32 -loleaut32 -luuid -mwindows -DUNICODE -D_UNICODE
 ```
 To install as screensaver:
 1. Copy LumonScreensaver.exe to LumonScreensaver.scr
@@ -47,8 +50,17 @@ g++ -o LumonScreensaver LumonScreensaver.cpp -framework Cocoa -framework CoreGra
 ## Development
 
 The application uses:
-- Windows: Win32 API and GDI+ for rendering
+- Windows: Win32 API and GDI+ for rendering (with COM for image loading)
 - Linux: X11 for window management
 - MacOS: Cocoa and Core Graphics
 
 The logo bounces off the screen edges with simple physics simulation.
+
+## Troubleshooting
+
+### Windows
+If you get compiler errors about missing headers or undefined types:
+1. Make sure you installed MSYS2 and ran the pacman command listed above
+2. Make sure you're using the MSYS2 MINGW64 version of g++
+3. Verify your PATH includes C:\msys64\mingw64\bin
+4. If using PowerShell/Command Prompt, run `g++ --version` to confirm you're using the MinGW version

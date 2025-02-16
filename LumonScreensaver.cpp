@@ -1,7 +1,11 @@
 #ifdef _WIN32
+    #include <objidl.h>  // For IStream
+    #include <ole2.h>    // For COM interfaces
     #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
     #include <gdiplus.h>
+    #pragma comment(lib, "gdiplus.lib")
+    #pragma comment(lib, "ole32.lib")
 #elif __APPLE__
     #include <Cocoa/Cocoa.h>
     #include <CoreGraphics/CoreGraphics.h>
