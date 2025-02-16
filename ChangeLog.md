@@ -1,6 +1,12 @@
 # Changelog
 All notable changes to the Lumon Bouncing Logo Screensaver will be documented in this file.
 
+## [1.0.4] - 2024-01-17
+### Added
+- Multicolor mode option with configurable color change interval
+- Color change interval setting (1-30 seconds)
+- Automatic random color changes in multicolor mode
+
 ## [1.0.3] - 2024-01-16
 ### Added
 - Color customization for the logo

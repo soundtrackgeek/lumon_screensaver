@@ -12,6 +12,9 @@ A simple screensaver that displays a bouncing Lumon logo. Works as a regular win
 
 Right-click the screensaver in Windows Screen Saver Settings and click "Settings" to configure:
 - Speed: Adjust the movement speed of the logo (1-10, default is 5)
+- Color: Choose a static color for the logo when not in multicolor mode
+- Multicolor Mode: When enabled, the logo color changes automatically
+  - Color Change Interval: Set how often the color changes (1-30 seconds, default is 5)
 
 ## Building from Source
 

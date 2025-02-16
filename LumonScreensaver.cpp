@@ -43,6 +43,9 @@ struct ScreenSaverState {
     int screenHeight;
     int speed;  // Add speed setting
     COLORREF color;  // Add color setting
+    bool multicolor;
+    int colorInterval;  // in seconds
+    DWORD lastColorChange;  // timestamp of last color change
     #ifdef _WIN32
         std::unique_ptr<Gdiplus::Image> logo;
         std::unique_ptr<Gdiplus::ColorMatrix> colorMatrix;
@@ -56,6 +59,8 @@ ScreenSaverState g_state;
 const wchar_t* REGISTRY_KEY = L"Software\\Lumon\\Screensaver";
 const wchar_t* SPEED_VALUE = L"Speed";
 const wchar_t* COLOR_VALUE = L"Color";  // Add color registry value
+const wchar_t* MULTICOLOR_VALUE = L"MultiColor";
+const wchar_t* INTERVAL_VALUE = L"ColorInterval";
 
 // Function to load settings from registry
 void LoadSettings() {
@@ -68,12 +73,23 @@ void LoadSettings() {
         value = RGB(255, 255, 255);  // Default white
         RegQueryValueEx(hKey, COLOR_VALUE, NULL, NULL, (LPBYTE)&value, &size);
         g_state.color = value;
+
+        value = 0;  // Default multicolor off
+        RegQueryValueEx(hKey, MULTICOLOR_VALUE, NULL, NULL, (LPBYTE)&value, &size);
+        g_state.multicolor = value != 0;
+
+        value = 5;  // Default 5 seconds interval
+        RegQueryValueEx(hKey, INTERVAL_VALUE, NULL, NULL, (LPBYTE)&value, &size);
+        g_state.colorInterval = value;
         
         RegCloseKey(hKey);
     } else {
         g_state.speed = 5;  // Default speed
         g_state.color = RGB(255, 255, 255);  // Default white
+        g_state.multicolor = false;  // Default multicolor off
+        g_state.colorInterval = 5;  // Default 5 seconds interval
     }
+    g_state.lastColorChange = GetTickCount();
 }
 
 // Function to save settings to registry
@@ -85,6 +101,10 @@ void SaveSettings() {
         RegSetValueEx(hKey, SPEED_VALUE, 0, REG_DWORD, (LPBYTE)&value, sizeof(DWORD));
         value = g_state.color;
         RegSetValueEx(hKey, COLOR_VALUE, 0, REG_DWORD, (LPBYTE)&value, sizeof(DWORD));
+        value = g_state.multicolor ? 1 : 0;
+        RegSetValueEx(hKey, MULTICOLOR_VALUE, 0, REG_DWORD, (LPBYTE)&value, sizeof(DWORD));
+        value = g_state.colorInterval;
+        RegSetValueEx(hKey, INTERVAL_VALUE, 0, REG_DWORD, (LPBYTE)&value, sizeof(DWORD));
         RegCloseKey(hKey);
     }
 }
@@ -121,15 +141,34 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
     
     switch (uMsg) {
         case WM_INITDIALOG: {
-            // Initialize slider
+            // Initialize speed slider
             HWND hwndSlider = GetDlgItem(hwndDlg, IDC_SPEED_SLIDER);
             SendMessage(hwndSlider, TBM_SETRANGE, TRUE, MAKELPARAM(1, 10));
             SendMessage(hwndSlider, TBM_SETPOS, TRUE, g_state.speed);
             
-            // Set initial text
+            // Set initial speed text
             wchar_t speedText[8];
             _itow_s(g_state.speed, speedText, 8, 10);
             SetDlgItemText(hwndDlg, IDC_SPEED_TEXT, speedText);
+            
+            // Initialize interval slider
+            hwndSlider = GetDlgItem(hwndDlg, IDC_INTERVAL_SLIDER);
+            SendMessage(hwndSlider, TBM_SETRANGE, TRUE, MAKELPARAM(1, 30));
+            SendMessage(hwndSlider, TBM_SETPOS, TRUE, g_state.colorInterval);
+            
+            // Set initial interval text
+            _itow_s(g_state.colorInterval, speedText, 8, 10);
+            SetDlgItemText(hwndDlg, IDC_INTERVAL_TEXT, speedText);
+            
+            // Set multicolor checkbox
+            CheckDlgButton(hwndDlg, IDC_MULTICOLOR_CHECK, 
+                g_state.multicolor ? BST_CHECKED : BST_UNCHECKED);
+            
+            // Enable/disable color controls based on multicolor state
+            EnableWindow(GetDlgItem(hwndDlg, IDC_COLOR_BUTTON), !g_state.multicolor);
+            EnableWindow(GetDlgItem(hwndDlg, IDC_COLOR_PREVIEW), !g_state.multicolor);
+            EnableWindow(GetDlgItem(hwndDlg, IDC_INTERVAL_SLIDER), g_state.multicolor);
+            EnableWindow(GetDlgItem(hwndDlg, IDC_INTERVAL_TEXT), g_state.multicolor);
             
             // Subclass color preview control
             HWND hwndPreview = GetDlgItem(hwndDlg, IDC_COLOR_PREVIEW);
@@ -141,17 +180,30 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
         }
         
         case WM_HSCROLL: {
-            if ((HWND)lParam == GetDlgItem(hwndDlg, IDC_SPEED_SLIDER)) {
-                int pos = SendMessage(GetDlgItem(hwndDlg, IDC_SPEED_SLIDER), TBM_GETPOS, 0, 0);
-                wchar_t speedText[8];
-                _itow_s(pos, speedText, 8, 10);
+            HWND hwndSlider = (HWND)lParam;
+            int pos = SendMessage(hwndSlider, TBM_GETPOS, 0, 0);
+            wchar_t speedText[8];
+            _itow_s(pos, speedText, 8, 10);
+            
+            if (hwndSlider == GetDlgItem(hwndDlg, IDC_SPEED_SLIDER)) {
                 SetDlgItemText(hwndDlg, IDC_SPEED_TEXT, speedText);
+            } else if (hwndSlider == GetDlgItem(hwndDlg, IDC_INTERVAL_SLIDER)) {
+                SetDlgItemText(hwndDlg, IDC_INTERVAL_TEXT, speedText);
             }
             return TRUE;
         }
 
         case WM_COMMAND:
             switch (LOWORD(wParam)) {
+                case IDC_MULTICOLOR_CHECK: {
+                    bool isChecked = (IsDlgButtonChecked(hwndDlg, IDC_MULTICOLOR_CHECK) == BST_CHECKED);
+                    EnableWindow(GetDlgItem(hwndDlg, IDC_COLOR_BUTTON), !isChecked);
+                    EnableWindow(GetDlgItem(hwndDlg, IDC_COLOR_PREVIEW), !isChecked);
+                    EnableWindow(GetDlgItem(hwndDlg, IDC_INTERVAL_SLIDER), isChecked);
+                    EnableWindow(GetDlgItem(hwndDlg, IDC_INTERVAL_TEXT), isChecked);
+                    return TRUE;
+                }
+                
                 case IDC_COLOR_BUTTON: {
                     CHOOSECOLOR cc = {0};
                     static COLORREF customColors[16] = {0};
@@ -168,11 +220,15 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
                     }
                     return TRUE;
                 }
+                
                 case IDOK:
                     g_state.speed = SendMessage(GetDlgItem(hwndDlg, IDC_SPEED_SLIDER), TBM_GETPOS, 0, 0);
+                    g_state.multicolor = (IsDlgButtonChecked(hwndDlg, IDC_MULTICOLOR_CHECK) == BST_CHECKED);
+                    g_state.colorInterval = SendMessage(GetDlgItem(hwndDlg, IDC_INTERVAL_SLIDER), TBM_GETPOS, 0, 0);
                     SaveSettings();
                     EndDialog(hwndDlg, IDOK);
                     return TRUE;
+                    
                 case IDCANCEL:
                     EndDialog(hwndDlg, IDCANCEL);
                     return TRUE;
@@ -530,6 +586,27 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
         RECT rect;
         GetClientRect(hwnd, &rect);
 
+        // Handle multicolor mode
+        if (g_state.multicolor) {
+            DWORD currentTime = GetTickCount();
+            if (currentTime - g_state.lastColorChange >= (g_state.colorInterval * 1000)) {
+                g_state.color = GenerateRandomColor();
+                g_state.lastColorChange = currentTime;
+                
+                // Update color matrix
+                if (g_state.colorMatrix) {
+                    *g_state.colorMatrix = Gdiplus::ColorMatrix{
+                        GetRValue(g_state.color) / 255.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+                        0.0f, GetGValue(g_state.color) / 255.0f, 0.0f, 0.0f, 0.0f,
+                        0.0f, 0.0f, GetBValue(g_state.color) / 255.0f, 0.0f, 0.0f,
+                        0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
+                        0.0f, 0.0f, 0.0f, 0.0f, 1.0f
+                    };
+                    g_state.imageAttributes->SetColorMatrix(g_state.colorMatrix.get());
+                }
+            }
+        }
+
         // Update position
         g_state.x += g_state.dx;
         g_state.y += g_state.dy;
@@ -594,6 +671,11 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
         DeleteDC(memDC);
         
         EndPaint(hwnd, &ps);
+    }
+
+    // Add new function for random color generation
+    COLORREF GenerateRandomColor() {
+        return RGB(rand() % 256, rand() % 256, rand() % 256);
     }
 
 #elif __APPLE__
