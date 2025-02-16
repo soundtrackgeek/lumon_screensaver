@@ -2,6 +2,7 @@
     #include <objidl.h>  // For IStream
     #include <ole2.h>    // For COM interfaces
     #include <wchar.h>   // For wtoll
+    #include <stdlib.h>  // For wtoll
     #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
     #include <commctrl.h>  // Add this for trackbar controls
@@ -582,6 +583,11 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
         g_state.logo.reset();
     }
 
+    // Add new function for random color generation before UpdateFrame
+    COLORREF GenerateRandomColor() {
+        return RGB(rand() % 256, rand() % 256, rand() % 256);
+    }
+
     void UpdateFrame(HWND hwnd) {
         RECT rect;
         GetClientRect(hwnd, &rect);
@@ -671,11 +677,6 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
         DeleteDC(memDC);
         
         EndPaint(hwnd, &ps);
-    }
-
-    // Add new function for random color generation
-    COLORREF GenerateRandomColor() {
-        return RGB(rand() % 256, rand() % 256, rand() % 256);
     }
 
 #elif __APPLE__
