@@ -6,6 +6,9 @@
     #include <gdiplus.h>
     #pragma comment(lib, "gdiplus.lib")
     #pragma comment(lib, "ole32.lib")
+    #ifndef SPI_SETSCREENSAVERRUNNING
+        #define SPI_SETSCREENSAVERRUNNING 97
+    #endif
 #elif __APPLE__
     #include <Cocoa/Cocoa.h>
     #include <CoreGraphics/CoreGraphics.h>
@@ -49,31 +52,61 @@ ScreenSaverState g_state;
     void CleanupScreenSaver();
     void UpdateFrame(HWND hwnd);
     void RenderFrame(HWND hwnd);
+    
+    // Add global variable for screensaver state
+    bool g_isScreenSaver = false;
 
     // Entry point
     extern "C" int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
-        // Parse command line
-        LPSTR cmdLine = GetCommandLine();
+        // Parse command line using Unicode
+        LPWSTR cmdLine = GetCommandLineW();
         bool isPreview = false;
         bool isConfig = false;
         bool isScreenSaver = false;
         HWND hwndParent = NULL;
 
-        if (strlen(cmdLine) > 2) {
-            switch (cmdLine[2]) {
-                case 'p':
-                case 'P':
+        // Initialize GDI+ first to catch any initialization errors
+        Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+        ULONG_PTR gdiplusToken;
+        Gdiplus::Status status = Gdiplus::GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, NULL);
+        if (status != Gdiplus::Ok) {
+            MessageBoxW(NULL, L"Failed to initialize GDI+", L"Error", MB_OK | MB_ICONERROR);
+            return 1;
+        }
+
+        // Skip the program name in command line
+        bool inQuotes = false;
+        LPWSTR p = cmdLine;
+        while (*p) {
+            if (*p == L'"') inQuotes = !inQuotes;
+            else if (*p == L' ' && !inQuotes) {
+                p++;
+                break;
+            }
+            p++;
+        }
+
+        // Now p points to arguments after program name
+        if (*p && *(p + 1)) {  // Need at least /X
+            switch (*(p + 1)) {
+                case L'p':
+                case L'P':
                     isPreview = true;
-                    hwndParent = (HWND)atoi(cmdLine + 3);
+                    if (*(p + 2)) {  // Has window handle
+                        hwndParent = (HWND)(ULONG_PTR)_wtoll(p + 3);
+                    }
                     break;
-                case 'c':
-                case 'C':
+                case L'c':
+                case L'C':
                     isConfig = true;
-                    hwndParent = (HWND)atoi(cmdLine + 3);
-                    MessageBox(NULL, TEXT("No configuration options available."), TEXT("Lumon Screensaver"), MB_OK | MB_ICONINFORMATION);
+                    if (*(p + 2)) {  // Has window handle
+                        hwndParent = (HWND)(ULONG_PTR)_wtoll(p + 3);
+                    }
+                    MessageBoxW(NULL, L"No configuration options available.", L"Lumon Screensaver", MB_OK | MB_ICONINFORMATION);
+                    Gdiplus::GdiplusShutdown(gdiplusToken);
                     return 0;
-                case 's':
-                case 'S':
+                case L's':
+                case L'S':
                     isScreenSaver = true;
                     break;
                 default:
@@ -82,27 +115,39 @@ ScreenSaverState g_state;
             }
         }
 
-        // Initialize GDI+
-        Gdiplus::GdiplusStartupInput gdiplusStartupInput;
-        Gdiplus::GdiplusStartup(&g_gdiplusToken, &gdiplusStartupInput, NULL);
+        // Tell system that screensaver is running
+        if (isScreenSaver) {
+            g_isScreenSaver = true;
+            BOOL dummy;
+            SystemParametersInfo(SPI_SETSCREENSAVERRUNNING, TRUE, &dummy, 0);
+        }
+
+        // Register the screensaver window class
+        WNDCLASSW wc = {};
+        wc.lpfnWndProc = (WNDPROC)ScreenSaverProc;
+        wc.hInstance = hInstance;
+        wc.lpszClassName = L"LumonScreensaverClass";
+        wc.hCursor = isScreenSaver ? NULL : LoadCursor(NULL, IDC_ARROW);
+        
+        if (!RegisterClassW(&wc)) {
+            MessageBoxW(NULL, L"Failed to register window class", L"Error", MB_OK | MB_ICONERROR);
+            Gdiplus::GdiplusShutdown(gdiplusToken);
+            return 1;
+        }
 
         // Get the primary monitor's resolution
         int screenWidth = GetSystemMetrics(SM_CXSCREEN);
         int screenHeight = GetSystemMetrics(SM_CYSCREEN);
 
-        // Register the screensaver window class
-        WNDCLASS wc = {};
-        wc.lpfnWndProc = (WNDPROC)ScreenSaverProc;
-        wc.hInstance = hInstance;
-        wc.lpszClassName = TEXT("LumonScreensaverClass");
-        wc.hCursor = isScreenSaver ? NULL : LoadCursor(NULL, IDC_ARROW);
-        RegisterClass(&wc);
-
         DWORD windowStyle;
         int windowX, windowY, windowWidth, windowHeight;
 
         if (isPreview) {
-            // Preview mode - fit in the preview window
+            if (!hwndParent) {
+                MessageBoxW(NULL, L"Preview mode requires a parent window", L"Error", MB_OK | MB_ICONERROR);
+                Gdiplus::GdiplusShutdown(gdiplusToken);
+                return 1;
+            }
             RECT rect;
             GetClientRect(hwndParent, &rect);
             windowX = 0;
@@ -111,7 +156,6 @@ ScreenSaverState g_state;
             windowHeight = rect.bottom;
             windowStyle = WS_CHILD | WS_VISIBLE;
         } else if (isScreenSaver) {
-            // Full screen mode
             windowX = 0;
             windowY = 0;
             windowWidth = screenWidth;
@@ -119,17 +163,17 @@ ScreenSaverState g_state;
             windowStyle = WS_POPUP | WS_VISIBLE;
         } else {
             // Test mode - windowed
-            windowX = CW_USEDEFAULT;
-            windowY = CW_USEDEFAULT;
+            windowX = (screenWidth - 800) / 2;  // Center the window
+            windowY = (screenHeight - 600) / 2;
             windowWidth = 800;
             windowHeight = 600;
             windowStyle = WS_OVERLAPPEDWINDOW | WS_VISIBLE;
         }
 
         // Create the window
-        HWND hwnd = CreateWindow(
-            TEXT("LumonScreensaverClass"),
-            TEXT("Lumon Screensaver"),
+        HWND hwnd = CreateWindowW(
+            L"LumonScreensaverClass",
+            L"Lumon Screensaver",
             windowStyle,
             windowX, windowY,
             windowWidth, windowHeight,
@@ -137,12 +181,30 @@ ScreenSaverState g_state;
         );
 
         if (!hwnd) {
+            DWORD error = GetLastError();
+            wchar_t errorMsg[256];
+            swprintf(errorMsg, 256, L"Failed to create window. Error code: %lu", error);
+            MessageBoxW(NULL, errorMsg, L"Error", MB_OK | MB_ICONERROR);
+            Gdiplus::GdiplusShutdown(gdiplusToken);
             return 1;
         }
+
+        // Store GDI+ token in global variable for cleanup
+        g_gdiplusToken = gdiplusToken;
 
         // Hide cursor in screensaver mode
         if (isScreenSaver) {
             ShowCursor(FALSE);
+        }
+
+        // Force window to foreground in screensaver mode
+        if (isScreenSaver) {
+            SetForegroundWindow(hwnd);
+        }
+
+        // After creating the window in screensaver mode, set it as topmost
+        if (isScreenSaver) {
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
         }
 
         // Message loop
@@ -157,16 +219,41 @@ ScreenSaverState g_state;
             ShowCursor(TRUE);
         }
 
-        // Cleanup GDI+
-        Gdiplus::GdiplusShutdown(g_gdiplusToken);
+        // Cleanup
+        if (isScreenSaver) {
+            BOOL dummy;
+            SystemParametersInfo(SPI_SETSCREENSAVERRUNNING, FALSE, &dummy, 0);
+        }
+
+        UnregisterClassW(L"LumonScreensaverClass", hInstance);
+        Gdiplus::GdiplusShutdown(gdiplusToken);
         return msg.wParam;
     }
 
     LRESULT WINAPI ScreenSaverProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+        static POINT s_lastMousePos = { 0, 0 };
+        
         switch (message) {
             case WM_CREATE:
+                if (g_isScreenSaver) {
+                    // Save initial mouse position
+                    GetCursorPos(&s_lastMousePos);
+                }
                 InitScreenSaver(hwnd);
                 SetTimer(hwnd, 1, 16, NULL); // ~60 FPS
+                return 0;
+
+            case WM_MOUSEMOVE:
+                if (g_isScreenSaver) {
+                    POINT currentPos;
+                    GetCursorPos(&currentPos);
+                    
+                    // Exit if mouse moved more than 3 pixels in any direction
+                    if (abs(currentPos.x - s_lastMousePos.x) > 3 ||
+                        abs(currentPos.y - s_lastMousePos.y) > 3) {
+                        DestroyWindow(hwnd);
+                    }
+                }
                 return 0;
 
             case WM_TIMER:
@@ -186,12 +273,25 @@ ScreenSaverState g_state;
 
             // Add input handling to exit screensaver
             case WM_KEYDOWN:
-            case WM_MOUSEMOVE:
             case WM_LBUTTONDOWN:
             case WM_RBUTTONDOWN:
             case WM_MBUTTONDOWN:
                 DestroyWindow(hwnd);
                 return 0;
+
+            // Add system key handling
+            case WM_SYSCOMMAND:
+                if (g_isScreenSaver) {
+                    switch (wParam) {
+                        case SC_CLOSE:
+                        case SC_MAXIMIZE:
+                        case SC_MINIMIZE:
+                        case SC_MOVE:
+                        case SC_SIZE:
+                            return 0;
+                    }
+                }
+                return DefWindowProc(hwnd, message, wParam, lParam);
 
             default:
                 return DefWindowProc(hwnd, message, wParam, lParam);
