@@ -1,6 +1,7 @@
 #ifdef _WIN32
     #include <objidl.h>  // For IStream
     #include <ole2.h>    // For COM interfaces
+    #include <wchar.h>   // For wtoll
     #define WIN32_LEAN_AND_MEAN
     #include <windows.h>
     #include <gdiplus.h>
@@ -93,14 +94,14 @@ ScreenSaverState g_state;
                 case L'P':
                     isPreview = true;
                     if (*(p + 2)) {  // Has window handle
-                        hwndParent = (HWND)(ULONG_PTR)_wtoll(p + 3);
+                        hwndParent = (HWND)(ULONG_PTR)wtoll(p + 3);
                     }
                     break;
                 case L'c':
                 case L'C':
                     isConfig = true;
                     if (*(p + 2)) {  // Has window handle
-                        hwndParent = (HWND)(ULONG_PTR)_wtoll(p + 3);
+                        hwndParent = (HWND)(ULONG_PTR)wtoll(p + 3);
                     }
                     MessageBoxW(NULL, L"No configuration options available.", L"Lumon Screensaver", MB_OK | MB_ICONINFORMATION);
                     Gdiplus::GdiplusShutdown(gdiplusToken);
