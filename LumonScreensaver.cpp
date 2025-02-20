@@ -468,7 +468,14 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
                     // Exit if mouse moved more than 3 pixels in any direction
                     if (abs(currentPos.x - s_lastMousePos.x) > 3 ||
                         abs(currentPos.y - s_lastMousePos.y) > 3) {
-                        DestroyWindow(hwnd);
+                        // Optimize exit process
+                        KillTimer(hwnd, 1);  // Kill timer immediately
+                        ShowCursor(TRUE);    // Show cursor immediately
+                        if (g_isScreenSaver) {
+                            BOOL dummy;
+                            SystemParametersInfo(SPI_SETSCREENSAVERRUNNING, FALSE, &dummy, 0);
+                        }
+                        PostMessage(hwnd, WM_CLOSE, 0, 0);  // Use PostMessage instead of DestroyWindow
                     }
                 }
                 return 0;
@@ -484,7 +491,10 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
             case WM_DESTROY:
                 KillTimer(hwnd, 1);
                 CleanupScreenSaver();
-                ShowCursor(TRUE);  // Make sure cursor is shown when exiting
+                if (g_isScreenSaver) {
+                    BOOL dummy;
+                    SystemParametersInfo(SPI_SETSCREENSAVERRUNNING, FALSE, &dummy, 0);
+                }
                 PostQuitMessage(0);
                 return 0;
 
@@ -493,7 +503,13 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
             case WM_LBUTTONDOWN:
             case WM_RBUTTONDOWN:
             case WM_MBUTTONDOWN:
-                DestroyWindow(hwnd);
+                if (g_isScreenSaver) {
+                    KillTimer(hwnd, 1);  // Kill timer immediately
+                    ShowCursor(TRUE);    // Show cursor immediately
+                    BOOL dummy;
+                    SystemParametersInfo(SPI_SETSCREENSAVERRUNNING, FALSE, &dummy, 0);
+                    PostMessage(hwnd, WM_CLOSE, 0, 0);  // Use PostMessage instead of DestroyWindow
+                }
                 return 0;
 
             // Add system key handling
@@ -509,6 +525,12 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
                     }
                 }
                 return DefWindowProc(hwnd, message, wParam, lParam);
+
+            case WM_CLOSE:
+                // Perform cleanup before destroying the window
+                CleanupScreenSaver();
+                DestroyWindow(hwnd);
+                return 0;
 
             default:
                 return DefWindowProc(hwnd, message, wParam, lParam);
@@ -580,7 +602,10 @@ INT_PTR CALLBACK ConfigDialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM
     }
 
     void CleanupScreenSaver() {
+        // Release resources immediately
         g_state.logo.reset();
+        g_state.colorMatrix.reset();
+        g_state.imageAttributes.reset();
     }
 
     // Add new function for random color generation before UpdateFrame

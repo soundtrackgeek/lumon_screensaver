@@ -1,6 +1,11 @@
 # Changelog
 All notable changes to the Lumon Bouncing Logo Screensaver will be documented in this file.
 
+## [1.0.5] - 2024-01-18
+### Fixed
+- Improved screensaver exit response time by optimizing cleanup process
+- Eliminated black screen delay when exiting via mouse movement or keyboard
+
 ## [1.0.4] - 2024-01-17
 ### Added
 - Multicolor mode option with configurable color change interval
